@@ -55,6 +55,7 @@ class History:
     def get_events_by_type(self, event_type):
         return self.events_by_type[event_type] if event_type in self.events_by_type else []
 
+    # RF_PP Change dt to event_id
     def get_events_up_to_last_decision(self, event_type):
         return self.get_events_up_to_datetime(event_type, self.dt_previous_decision_task)
 
@@ -95,13 +96,18 @@ class History:
                         'ChildWorkflowExecutionFailed',
                         'ChildWorkflowExecutionTimedOut',
                         'ChildWorkflowExecutionCanceled',
-                        'ChildWorkflowExecutionTerminated']
+                        'ChildWorkflowExecutionTerminated',
+                        'LambdaFunctionFailed',
+                        'LambdaFunctionTimedOut', 
+                        'StartLambdaFunctionFailed']
 
         types_completed = ['ActivityTaskCompleted',
                            'TimerFired',
-                           'ChildWorkflowExecutionCompleted']
+                           'ChildWorkflowExecutionCompleted',
+                           'LambdaFunctionCompleted']
 
         types_decision_failed = ['DecisionTaskTimedOut']
+
         events = [self.get_event(i) for i in range(first_event_id, last_event_id + 1)]
         decider_events = {}
         decider_events['faulty'] = self._filter_events_by_type(events, types_faulty)
@@ -127,8 +133,13 @@ class History:
         attributes = event_type[:1].lower() + event_type[1:] + 'EventAttributes'
         return event[attributes]
 
+    # TODO Test
     def get_id_task_event(self, event, allow_read_next_event_page=True):
         """The activity_id or timer_id corresponding to an event."""
+
+        # Abbreviation to fulfil 100 character code convention
+        get_id_cwei = self.get_id_start_child_workflow_execution_initiated
+
         types = {'ActivityTaskFailed': self.get_id_activity_task_event,
                  'ActivityTaskTimedOut': self.get_id_activity_task_event,
                  'ActivityTaskCompleted': self.get_id_activity_task_event,
@@ -140,8 +151,13 @@ class History:
                  'ChildWorkflowExecutionTimedOut': self.get_id_child_workflow_event,
                  'ChildWorkflowExecutionCanceled': self.get_id_child_workflow_event,
                  'ChildWorkflowExecutionTerminated': self.get_id_child_workflow_event,
-                 'StartChildWorkflowExecutionInitiated':
-                     self.get_id_start_child_workflow_execution_initiated}
+                 'StartChildWorkflowExecutionInitiated': get_id_cwei,
+                 'LambdaFunctionCompleted': self.get_id_lambda_function_event,
+                 'LambdaFunctionFailed': self.get_id_lambda_function_event,
+                 'LambdaFunctionTimedOut': self.get_id_lambda_function_event,
+                 'LambdaFunctionStarted': self.get_id_lambda_function_event,
+                 'StartLambdaFunctionFailed': self.get_id_lambda_function_event,
+                 'LambdaFunctionScheduled': self.get_id_lambda_function_scheduled}
 
         if not event['eventType'] in types:
             raise ValueError('Do not know how to retrieve id of {}'.format(event['eventType']))
@@ -189,11 +205,29 @@ class History:
         id_ = attributes['workflowExecution']['workflowId']
         return id_
 
+    def get_id_lambda_function_event(self, event, allow_read_next_page=True):
+        #RF_PP DRY
+        attributes = self.get_event_attributes(event)
+        scheduled_event_id = attributes['scheduledEventId']
+        scheduled_event = self.get_event(scheduled_event_id, allow_read_next_page)
+
+        if scheduled_event:
+            return self.get_id_lambda_function_scheduled(scheduled_event)
+        else:
+            return None
+
+    def get_id_lambda_function_scheduled(self, event, allow_read_next_page=True):
+        attributes = self.get_event_attributes(event)
+        return attributes['id']
+
+    # TODO Test
     def get_number_activity_failures(self, task):
         if isinstance(task, floto.specs.task.ActivityTask):
             return self.get_number_activity_task_failures(task.id_)
         elif isinstance(task, floto.specs.task.ChildWorkflow):
             return self.get_number_child_workflow_failures(task.id_)
+        elif isinstance(task, floto.specs.task.LambdaFunction):
+            return self.get_number_lambda_function_failures(task.id_)
         else:
             return 0
 
@@ -219,6 +253,19 @@ class History:
         failed_events = [e for events in failed_events for e in events]
         current_failures = [e for e in failed_events if e['eventTimestamp'] > dt]
         return len(current_failures)
+
+    # TODO Test
+    # RF_PP DRY?
+    def get_number_lambda_function_failures(self, id_):
+        dt = self.get_datetime_last_event_of_activity(id_, 'LambdaFunctionCompleted')
+        failed_event_types = ['LambdaFunctionFailed', 
+                              'LambdaFunctionTimedOut',
+                              'StartLambdaFunctionFailed']
+        failed_events = [self.get_events_by_task_id_and_type(id_, t) for t in failed_event_types]
+        failed_events = [e for events in failed_events for e in events]
+        current_failures = [e for e in failed_events if e['eventTimestamp'] > dt]
+        return len(current_failures)
+        
 
     def get_datetime_previous_decision(self):
         """The datetime of the previous decision. If there has not been a previous decision task,
@@ -270,11 +317,14 @@ class History:
             input = self.get_workflow_input()
         return input
 
+    #TODO Test
     def get_result_completed_activity(self, task):
         if isinstance(task, floto.specs.task.ActivityTask):
             c = self.get_events_by_task_id_and_type(task.id_, 'ActivityTaskCompleted')
         elif isinstance(task, floto.specs.task.ChildWorkflow):
             c = self.get_events_by_task_id_and_type(task.id_, 'ChildWorkflowExecutionCompleted')
+        elif isinstance(task, floto.specs.task.LambdaFunction):
+            c = self.get_events_by_task_id_and_type(task.id_, 'LambdaFunctionCompleted')
         else:
             c = None
 
@@ -294,6 +344,7 @@ class History:
         if self.previous_decision_id == 0:
             return True
 
+    # TODO Test
     def is_task_completed(self, task):
         """
         Parameter
@@ -306,6 +357,8 @@ class History:
             return self.is_timer_task_completed(task.id_)
         elif isinstance(task, floto.specs.task.ChildWorkflow):
             return self.is_child_workflow_completed(task.id_)
+        elif isinstance(task, floto.specs.task.LambdaFunction):
+            return self.is_lambda_function_completed(task.id_)
         else:
             raise ValueError('Unknown type: {}'.format(task.__class__.__name__))
 
@@ -322,6 +375,7 @@ class History:
             return self.is_timer_task_completed(timer_id)
         return False
 
+    # RF_PP
     def is_activity_task_completed(self, activity_id):
         """Returns whether activity task with <activity_id> has completed or not."""
         scheduled = self.get_events_by_task_id_and_type(activity_id, 'ActivityTaskScheduled')
@@ -347,6 +401,19 @@ class History:
             return self.is_child_workflow_completed(workflow_id)
         return False
 
+    # TODO test
+    def is_lambda_function_completed(self, id_):
+        scheduled = self.get_events_by_task_id_and_type(id_, 'LambdaFunctionScheduled')
+        if scheduled:
+            completed = self.get_events_by_task_id_and_type(id_, 'LambdaFunctionCompleted')
+            if completed and completed[0]['eventTimestamp'] > scheduled[0]['eventTimestamp']:
+                return True
+        elif self._has_next_event_page():
+            self._read_next_event_page()
+            return self.is_lambda_function_completed(id_)
+        return False
+        
+
     def _read_events_up_to_last_decision(self, response):
         self._read_event_page(response['events'])
         self.dt_previous_decision_task = self.get_datetime_previous_decision()
@@ -363,6 +430,7 @@ class History:
 
         self._fill_events_by_activity_id_for_types(max_event_id=events[0]['eventId'])
 
+    # TODO test
     def _fill_events_by_activity_id_for_types(self, max_event_id):
         types = ['ActivityTaskCompleted',
                  'ActivityTaskFailed',
@@ -375,7 +443,13 @@ class History:
                  'ChildWorkflowExecutionFailed',
                  'ChildWorkflowExecutionTimedOut',
                  'ChildWorkflowExecutionCanceled',
-                 'ChildWorkflowExecutionTerminated']
+                 'ChildWorkflowExecutionTerminated',
+                 'LambdaFunctionCompleted',
+                 'LambdaFunctionStarted',
+                 'LambdaFunctionFailed',
+                 'LambdaFunctionTimedOut',
+                 'LambdaFunctionScheduled',
+                 'StartLambdaFunctionFailed']
         for t in types:
             events = self._collect_new_events_for_fill_by_activity_id(t, max_event_id)
             self._fill_events_by_activity_id(events)
@@ -436,3 +510,4 @@ class History:
 
     def _filter_events_by_type(self, events, types):
         return [e for e in events if e['eventType'] in types]
+

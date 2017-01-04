@@ -29,6 +29,7 @@ class Decider(Base):
         self.domain = self.decider_spec.domain
 
         self.repeat_workflow = self.decider_spec.repeat_workflow
+        # TODO lambda functions don't need activity task list; clean up
         self.default_activity_task_list = self.decider_spec.default_activity_task_list
 
         self.decision_builder = None

@@ -7,10 +7,11 @@ logger = logging.getLogger(__name__)
 
 
 class ScheduleActivityTask(Decision):
+    # TODO: args
     def __init__(self, **args):
         super().__init__(required_fields=['decisionType',
-                                          'scheduleActivityTaskDecisionAttributes.activityType.name',
-                                          'scheduleActivityTaskDecisionAttributes.activityType.version'])
+                          'scheduleActivityTaskDecisionAttributes.activityType.name',
+                          'scheduleActivityTaskDecisionAttributes.activityType.version'])
         self.activity_type = args.get('activity_type', None)
         self.activity_id = args.get('activity_id', None)
         self.input = args.get('input', None)

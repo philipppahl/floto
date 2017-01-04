@@ -81,7 +81,10 @@ class TestHistory():
         assert history.get_events_by_type('foo') == []
 
     def test_get_events_for_decision(self, history):
-        raw_events = [{'eventId':12, 'eventType':'ChildWorkflowExecutionCompleted'},
+        raw_events = [{'eventId':15, 'eventType':'LambdaFunctionCompleted'},
+                      {'eventId':14, 'eventType':'LambdaFunctionTimedOut'},
+                      {'eventId':13, 'eventType':'LambdaFunctionFailed'},
+                      {'eventId':12, 'eventType':'ChildWorkflowExecutionCompleted'},
                       {'eventId':11, 'eventType':'ChildWorkflowExecutionTerminated'},
                       {'eventId':10, 'eventType':'ChildWorkflowExecutionCanceled'},
                       {'eventId':9, 'eventType':'ChildWorkflowExecutionTimedOut'},
@@ -96,11 +99,11 @@ class TestHistory():
                       {'eventId':0, 'eventType':'WorkflowExecutionStarted'}]
 
         history.events_by_id = {e['eventId']:e for e in raw_events}
-        history.highest_event_id = 12
-        events = history.get_events_for_decision(1,12)
-        assert len(events['faulty']) == 8
-        assert set([e['eventId'] for e in events['faulty']]) == set([1,2,3,7,8,9,10,11])
-        assert set([e['eventId'] for e in events['completed']]) == set([4,5,12])
+        history.highest_event_id = 15
+        events = history.get_events_for_decision(1,15)
+        assert len(events['faulty']) == 10
+        assert set([e['eventId'] for e in events['faulty']]) == set([1,2,3,7,8,9,10,11,13,14])
+        assert set([e['eventId'] for e in events['completed']]) == set([4,5,12,15])
         assert set([e['eventId'] for e in events['decision_failed']]) == set([6])
 
     def test_event_by_activity_id(self, dt1, dt2, empty_response):
@@ -461,6 +464,23 @@ class TestHistory():
         event_type = 'StartChildWorkflowExecutionInitiated'
         assert history.get_id_task_event({'eventType':event_type}) == 'cw_id'
 
+    @pytest.mark.parametrize('event_type', ['LambdaFunctionCompleted',
+        'LambdaFunctionFailed',
+        'LambdaFunctionTimedOut',
+        'LambdaFunctionStarted',
+        'StartLambdaFunctionFailed'])
+    def test_get_id_task_event_lambda(self, history, mocker, event_type):
+        mocker.patch('floto.History.get_id_lambda_function_event')
+        event = {'eventType':event_type}
+        history.get_id_task_event(event)
+        history.get_id_lambda_function_event.assert_called_once_with(event, True)
+
+    def test_get_id_task_event_lambda(self, history, mocker):
+        mocker.patch('floto.History.get_id_lambda_function_scheduled')
+        event = {'eventType':'LambdaFunctionScheduled'}
+        history.get_id_task_event(event)
+        history.get_id_lambda_function_scheduled.assert_called_once_with(event, True)
+
     def test_get_id_start_child_workflow_execution_initiated(self, history):
         event = {'eventId':3,
                 'eventType':'StartChildWorkflowExecutionInitiated',
@@ -474,6 +494,13 @@ class TestHistory():
                     {'workflowId':'wid'}}}
         assert history.get_id_child_workflow_event(event) == 'wid'
 
+    def test_get_id_lambda_function_event(self, history):
+        event = {'eventId':3,
+                'eventType':'LambdaFunctionFailed',
+                'lambdaFunctionFailedEventAttributes':{'workflowExecution':
+                    {'workflowId':'wid'}}}
+        assert history.get_id_child_workflow_event(event) == 'wid'
+
     def test_get_id_previous_started(self, empty_response, dt1, dt2):
         started_2 = {'eventId':2,
                      'eventType':'DecisionTaskStarted',
@@ -484,6 +511,28 @@ class TestHistory():
         empty_response['events'] = [started_2, started_1]
         h = floto.History(domain='d', task_list='tl', response=empty_response)
         assert h.get_id_previous_started(started_2) == 1
+
+    def test_get_id_lambda_function_event(self, empty_response, dt1, dt2):
+        lambda_function_completed_event = {'eventId':2,
+                'eventType':'LambdaFunctionCompleted',
+                'eventTimestamp':dt2,
+                'lambdaFunctionCompletedEventAttributes':{'scheduledEventId':1}}
+
+        events = [ lambda_function_completed_event,
+                  {'eventId':1,
+                   'eventType':'LambdaFunctionScheduled',
+                   'eventTimestamp':dt1,
+                   'lambdaFunctionScheduledEventAttributes':{'id':'lf_id'}}]
+        empty_response['events'] = events 
+        h = floto.History(domain='d', task_list='tl', response=empty_response)
+        assert h.get_id_lambda_function_event(lambda_function_completed_event) == 'lf_id'
+
+    def test_get_id_lambda_function_scheduled(self, history):
+        lf_scheduled = {'eventId':1,
+                'eventType':'LambdaFunctionScheduled',
+                'eventTimestamp':dt1,
+                'lambdaFunctionScheduledEventAttributes':{'id':'lf_id'}}
+        assert history.get_id_lambda_function_scheduled(lf_scheduled) == 'lf_id'
 
     def test_get_id_previous_started_workflow_start(self, history, dt3):
         started_event = {'eventId': 3,
@@ -781,6 +830,7 @@ class TestHistory():
         empty_response['events'] = events 
         h = floto.History(domain='d', task_list='tl', response=empty_response)
         assert h.get_number_child_workflow_failures('wid') == 1
+
 
     def test_get_workflow_input(self, history):
         assert history.get_workflow_input() == 'workflow_input' 

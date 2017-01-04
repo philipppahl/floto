@@ -19,6 +19,7 @@ class DecisionInput:
         #else:
             #return self._get_input(task)
 
+    # TODO: lf support
     def get_input(self, task, task_input_key, required_tasks):
         """Gets the input for <task>. If task has dependencies the result of the dependencies are
         added to the input. If task does not have dependencies, the workflow input is added. If the
@@ -57,6 +58,7 @@ class DecisionInput:
                     result[task.id_] = r
         return result
 
+    # TODO document
     def _remove_activity_tasks(self, input_):
         if isinstance(input_, dict):
             new_input = {}

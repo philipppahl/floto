@@ -3,3 +3,4 @@ from .activity_task import ActivityTask
 from .timer import Timer
 from .generator import Generator
 from .child_workflow import ChildWorkflow
+from .lambda_function import LambdaFunction

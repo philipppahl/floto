@@ -59,6 +59,7 @@ class Base:
                                                                   identity=self.identity)
         if 'taskToken' in self.last_response:
             self.task_token = self.last_response['taskToken']
+            # RF_PP make history a global Singleton?
             self.history = floto.History(domain=self.domain, task_list=self.task_list,
                                          response=self.last_response)
             self.run_id = self.last_response['workflowExecution']['runId']

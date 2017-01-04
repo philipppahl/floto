@@ -63,3 +63,4 @@ class TestLambdaFunction:
         f = floto.specs.task.LambdaFunction.deserialized(**s)
         assert f.name == 'function_name'
         assert isinstance(f.retry_strategy, floto.specs.retry_strategy.InstantRetry)
+

@@ -26,6 +26,7 @@ class ActivityTask(Task):
         """
         super().__init__(requires=requires)
 
+        # TODO into base class?
         if retry_strategy and not isinstance(retry_strategy, floto.specs.retry_strategy.Strategy):
             raise ValueError('Retry strategy must be of type floto.specs.retry_strategy.Strategy')
 
@@ -54,6 +55,7 @@ class ActivityTask(Task):
 
         Notes
         -----
+        # TODO
         Note that the parameter `activity_id` is assigned to the attribute `id_`
 
         Examples

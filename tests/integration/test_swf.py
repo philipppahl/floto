@@ -17,6 +17,7 @@ from deciders.test_14 import test_14
 from deciders.test_15 import test_15
 from deciders.test_16 import test_16
 from deciders.test_17 import test_17
+from deciders.test_18 import test_18
 from test_helper import get_activity_result, docprint, print_result, print_details
 
 from activity_worker import ActivityWorkerProcess
@@ -244,8 +245,18 @@ def run_17():
     result_activity_6 = get_activity_result(result, 'activity6', 'v1')
     assert set(result_activity_6) == set(['a.in', 'b.in'])
 
-tests = [run_01, run_02, run_03, run_04, run_05, run_06, run_07, run_08, run_09, run_10, run_11,
-         run_12, run_13, run_14, run_15, run_16, run_17]
+@docprint
+def run_18():
+    """Test 18
+    """
+    result = test_18()
+    print_result(result)
+    assert list(result.values())[0] == 'Hello from Lambda'
+
+# tests = [run_01, run_02, run_03, run_04, run_05, run_06, run_07, run_08, run_09, run_10, run_11,
+         # run_12, run_13, run_14, run_15, run_16, run_17, run_18]
+
+tests = [run_18]
 
 try:
     [t() for t in tests]

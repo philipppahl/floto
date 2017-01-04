@@ -29,7 +29,10 @@ class Task:
 
         self.requires = requires
 
+    # TODO Fix: Base class does not know about domain, name, etc
     def _default_id(self, *, domain, name, version, input):
+        # TODO document for lambda case, i.e. no version
+        # TODO test for lambda case
         """Create a hex digest from name, version, domain, input (to be used as unique id)
 
         Returns
@@ -45,7 +48,11 @@ class Task:
             requires_string = ''
 
         hash_ = hashlib.sha1((input_string + requires_string).encode()).hexdigest()[:10]
-        return '{}:{}:{}:{}'.format(name, version, domain, hash_)
+        if version:
+            id_ = '{}:{}:{}:{}'.format(name, version, domain, hash_)
+        else:
+            id_ = '{}:{}:{}'.format(name, domain, hash_)
+        return id_
 
     def serializable(self):
         """Serializable representation of self

@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 import json
 
 class DecisionBuilder:
+    # RF_PP: Default activity task list not needed if lambda functions in use
+    # RF_PP Remove!
     def __init__(self, *, activity_tasks, default_activity_task_list):
         self.workflow_fail = False
         self.workflow_complete = False
@@ -83,6 +85,7 @@ class DecisionBuilder:
             decisions.append(decision)
         return decisions
 
+    # TODO add ScheduleActivityTaskFailed handling
     def get_decisions_faulty_tasks(self, task_events):
         """Analyze the faulty tasks and their retry strategies. If a task is to be resubmitted,
         add a decision to the output.
@@ -159,6 +162,7 @@ class DecisionBuilder:
         self.workflow_complete = True
         return [d]
 
+    # TODO test lambda support
     def get_decision_schedule_activity(self, *, task):
         requires = [self.tasks_by_id[i] for i in self.execution_graph.get_requires(task.id_)]
 
@@ -172,6 +176,11 @@ class DecisionBuilder:
 
         elif isinstance(task, floto.specs.task.Timer):
             return self.get_decision_start_timer(timer_task=task)
+
+        elif isinstance(task, floto.specs.task.LambdaFunction):
+            input_ = self.decision_input.get_input(task, 'lambda_function', requires)
+            return self.get_decision_schedule_lambda_function(lambda_task=task, input=input_)
+
         else:
             m = 'Do not know how to get decision for task of type: {}'.format(type(task))
             raise ValueError(m)
@@ -191,14 +200,22 @@ class DecisionBuilder:
                 task_list=task_list, input=input)
         return decision
 
+    def get_decision_schedule_lambda_function(self, *, lambda_task, input=None):
+        args = {'id_': lambda_task.id_,
+                'name': lambda_task.name}
+        if input: args['input'] = input
+        decision = floto.decisions.ScheduleLambdaFunction(**args)
+        return decision
+
     def get_decision_start_timer(self, *, timer_task):
         return floto.decisions.StartTimer(timer_id=timer_task.id_,
                                           start_to_fire_timeout=timer_task.delay_in_seconds)
 
     def get_decision_start_child_workflow_execution(self, child_workflow_task=None, input_=None):
         logger.debug('DecisionBuilder.get_decision_start_child_workflow_execution...')
-        workflow_type = floto.api.WorkflowType(domain='d', name=child_workflow_task.workflow_type_name,
-                version=child_workflow_task.workflow_type_version)
+        workflow_type = floto.api.WorkflowType(domain='d', 
+                                               name=child_workflow_task.workflow_type_name,
+                                               version=child_workflow_task.workflow_type_version)
         args = {'workflow_id':child_workflow_task.id_,
                 'workflow_type':workflow_type}
         if child_workflow_task.task_list:
@@ -291,7 +308,6 @@ class DecisionBuilder:
 
         self._add_tasks_to_execution_graph(new_tasks)
 
-        # TODO test
         for id_ in self.execution_graph.get_depending(generator.id_) :
             self.execution_graph.add_dependencies(id_, [t.id_ for t in new_tasks])
 

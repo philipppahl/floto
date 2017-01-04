@@ -1,6 +1,5 @@
 class Decision:
     def __init__(self, required_fields=None):
-
         self.required_fields = required_fields or []
 
     def get_decision(self):

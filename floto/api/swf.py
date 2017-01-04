@@ -85,9 +85,10 @@ class Swf(object):
             else:
                 logger.error(e)
 
+    # TODO Test lambda role
     def start_workflow_execution(self, *, domain, workflow_type_name, workflow_type_version,
                                  workflow_id=None, task_list=None, input=None,
-                                 decision_task_start_to_close_timeout=None):
+                                 decision_task_start_to_close_timeout=None, lambda_role=None):
         """Start the workflow execution
 
         Parameters
@@ -109,6 +110,8 @@ class Swf(object):
             The maximum duration of decision tasks for this workflow execution, in seconds.
             This parameter overrides the defaultTaskStartToCloseTimeout specified when registering
             the workflow type using RegisterWorkflowType .
+        lambda_role : Optional[str]
+            IAM role which provides access to Lambda from floto. 
         """
 
         workflow_id = workflow_id or (workflow_type_name + '_' + workflow_type_version)
@@ -123,6 +126,9 @@ class Swf(object):
 
         if decision_task_start_to_close_timeout:
             args['taskStartToCloseTimeout'] = str(decision_task_start_to_close_timeout)
+
+        if lambda_role:
+            args['lambdaRole'] = lambda_role
 
         return self.client.start_workflow_execution(**args)
 

@@ -4,3 +4,4 @@ from .schedule_activity_task import ScheduleActivityTask
 from .start_child_workflow_execution import StartChildWorkflowExecution
 from .fail_workflow_execution import FailWorkflowExecution
 from .start_timer import StartTimer
+from .schedule_lambda_function import ScheduleLambdaFunction

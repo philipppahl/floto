@@ -2,7 +2,7 @@ import pytest
 import json
 import datetime
 import floto.decider
-from floto.specs.task import ActivityTask, Timer, ChildWorkflow, Generator
+from floto.specs.task import ActivityTask, Timer, ChildWorkflow, Generator, LambdaFunction
 from floto.specs import DeciderSpec
 import floto.specs.retry_strategy
 
@@ -30,6 +30,12 @@ def child_workflow_task():
             'task_list':'tl',
             'input':{'path':'filename'}}
     return ChildWorkflow(**args)
+
+@pytest.fixture
+def lambda_function():
+    args = {'domain':'d',
+            'name':'lf_name'}
+    return LambdaFunction(**args)
 
 @pytest.fixture
 def timer():
@@ -307,6 +313,16 @@ class TestDecisionBuilder(object):
         assert isinstance(d, floto.decisions.StartTimer)
         assert d.start_to_fire_timeout == 10
 
+    def test_get_decision_schedule_activity_with_lambda_function(self, builder_with_graph, mocker, 
+            lambda_function):
+        mocker.patch('floto.decider.ExecutionGraph.get_requires')
+        mocker.patch('floto.decider.DecisionBuilder.get_decision_schedule_lambda_function')
+        d = builder_with_graph.get_decision_schedule_activity(task=lambda_function)
+        args_assertion = {'lambda_task':lambda_function,
+                          'input':{'workflow':'workflow_input'}}
+        b = builder_with_graph
+        b.get_decision_schedule_lambda_function.assert_called_once_with(**args_assertion)
+
     def test_get_decision_after_activity_completion(self, mocker, builder_with_graph, task_1):
         mocker.patch('floto.History.get_id_activity_task_event', return_value=task_1.id_)
         mocker.patch('floto.History.is_task_completed', return_value=True)
@@ -351,11 +367,18 @@ class TestDecisionBuilder(object):
         assert d.task_list == builder.default_activity_task_list
 
     def test_get_decision_schedule_activity_task(self, builder):
-        at = floto.specs.task.ActivityTask(domain='d', name='at_name', version='at_version', id_='id',
-                task_list='tl_of_task')
+        at = floto.specs.task.ActivityTask(domain='d', name='at_name', version='at_version', 
+                id_='id', task_list='tl_of_task')
         d = builder.get_decision_schedule_activity_task(activity_task=at)
         assert isinstance(d, floto.decisions.ScheduleActivityTask)
         assert d.task_list == at.task_list 
+    
+    #RF_PP
+    def test_get_decision_schedule_lambda_function(self, builder):
+        lt = floto.specs.task.LambdaFunction(domain='d', name='lf_name', id_='lf_id')
+        d = builder.get_decision_schedule_lambda_function(lambda_task=lt, input={'foo':'bar'})
+        assert isinstance(d, floto.decisions.ScheduleLambdaFunction)
+        assert d.id_ == 'lf_id'
 
     def test_get_decision_start_timer(self, builder):
         timer_task = floto.specs.task.Timer(id_='t_id', delay_in_seconds=60)
@@ -379,6 +402,7 @@ class TestDecisionBuilder(object):
                 input_={'foo':'bar'})
         assert d.task_list['name'] == 'tl'
         assert json.loads(d._get_attribute('input')) == {'foo':'bar'}
+
 
     def test_all_workflow_tasks_finished_with_generator(self, builder, mocker):
         mocker.patch('floto.decider.DecisionBuilder.completed_contain_generator', 
