@@ -25,7 +25,7 @@ class Task:
         self.id_ = id_
 
         if requires and not all([isinstance(t, str) for t in requires]):
-            raise ValueError('requires must be list of str')
+            raise ValueError('requires must be list of task ids')
 
         self.requires = requires
 

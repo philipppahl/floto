@@ -6,6 +6,7 @@ from floto.specs import DeciderSpec
 
 def test_18():
     domain = 'floto_test'
+    # TODO: Lambda function must be registtered with AWS
     lambda_function = floto.specs.task.LambdaFunction(domain=domain, name='floto_test_function')
     decider_spec = DeciderSpec(domain=domain,
                                task_list=str(uuid.uuid4()),
@@ -19,8 +20,7 @@ def test_18():
             'workflow_type_name':'test_workflow',
             'workflow_type_version':'v1',
             'task_list':decider_spec.task_list,
-            # 'lambda_role':'arn:aws:iam::aws:policy/service-role/AWSLambdaRole'}
-            # 'lambda_role':'arn:aws:iam::130141755138:role/swf-lambda'}
+            # TODO Role must be registered with AWS
             'lambda_role':'arn:aws:iam::130141755138:role/swf-lambda'}
 
     response = swf.start_workflow_execution(**workflow_args)
