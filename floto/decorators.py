@@ -1,12 +1,11 @@
-import gzip
+import bz2
+import base64
 from functools import wraps
 
 import floto.specs
 import floto.specs.task
 
 ACTIVITY_FUNCTIONS = {}
-COMPRESS_GENERATOR_RESULT = False
-
 
 def activity(*, domain, name, version):
     """Decorator that registers a function to `ACTIVITY_FUNCTIONS`
@@ -20,11 +19,11 @@ def activity(*, domain, name, version):
 
 def compress_generator_result(result):
     serializable = [t.serializable() for t in result]
-    if result and COMPRESS_GENERATOR_RESULT:
+    if result and floto.COMPRESS_GENERATOR_RESULT:
         j = floto.specs.JSONEncoder.dump_object(serializable)
-        z = gzip.compress(j.encode())
-        z = 'x'.join([format(c, 'x') for c in z])
-        return z
+        z = bz2.compress(j.encode('UTF-8'))
+        s = base64.b64encode(z).decode('UTF-8')
+        return s
     else:
         return serializable
 

@@ -4,6 +4,7 @@ import logging
 import boto3
 import botocore.exceptions
 from botocore.client import Config
+import signal
 
 import floto.api
 import floto.specs
@@ -17,8 +18,10 @@ class Swf(object):
         self.domains = floto.api.Domains(self)
         self.default_maximum_page_size = 400
 
-    def init_client(self, region_name=None, profile_name=None):
+        signal.signal(signal.SIGINT, self.close_session)
+        signal.signal(signal.SIGTERM, self.close_session)
 
+    def init_client(self, region_name=None, profile_name=None):
         params = {'region_name': None,
                   'profile_name': None}
 
@@ -39,6 +42,10 @@ class Swf(object):
         config = Config(connect_timeout=50, read_timeout=70)
         session = boto3.session.Session(**session_parameter)
         return session.client('swf', config=config)
+
+    def close_session(self, signum, frame):
+        if self._client:
+            self.client._endpoint.http_session.close()
 
     def poll_for_decision_task_page(self, domain=None, task_list=None, page_token=None,
                                     page_size=None, identity=None):

@@ -16,11 +16,11 @@ def task_2(task_1):
 
 @pytest.fixture
 def generator_task():
-    return Generator(domain='d', name='g', version='v1')
+    return Generator(domain='d', name='g', version='v1', task_list='tl1')
 
 @pytest.fixture
 def generator_task_2():
-    return Generator(domain='d', name='g2', version='v1')
+    return Generator(domain='d', name='g2', version='v1', task_list='tl1')
 
 @pytest.fixture
 def child_workflow_task():
@@ -456,24 +456,22 @@ class TestDecisionBuilder(object):
         b._update_execution_graph(generator_task)
         assert b.tasks_by_id[task.id_]
 
-    #def test_update_execution_graph_with_compression(self, mocker, builder):
-        #result = json.dumps('r')
-        #mocker.patch('floto.decider.DecisionBuilder._decompress_result', return_value=result)
-        #mocker.patch('floto.History.get_result_completed_activity', return_value='gr')
-        #mocker.patch('floto.decider.ExecutionGraph.update')
-        #builder._decompress_generator_result = True
-        #builder._update_execution_graph('g')
-        #builder._decompress_result.assert_called_once_with('gr')
+    def test_decompress_result(self, mocker, builder, task_1):
+        floto.COMPRESS_GENERATOR_RESULT = True
+        generator_result = [task_1] 
+        compressed_result = floto.decorators.compress_generator_result(generator_result)
+        floto.COMPRESS_GENERATOR_RESULT=False
+        result = builder._decompress_result(compressed_result)
+        assert result[0]['id_'] == task_1.id_
 
-    #def test_decompress_result(self, mocker, builder):
-        #tasks = ['t']
-        #generator_result = json.loads(floto.specs.JSONEncoder.dump_object(tasks))
-        #floto.decorators.COMPRESS_GENERATOR_RESULT=True
-        #compressed_result = floto.decorators.compress_generator_result(generator_result)
-        #floto.decorators.COMPRESS_GENERATOR_RESULT=False
+    def test_compression_flag(self):
+        floto.COMPRESS_GENERATOR_RESULT = True
+        b = floto.decider.DecisionBuilder(activity_tasks=[], default_activity_task_list='')
+        assert b._decompress_generator_result == True
 
-        #result = builder._decompress_result(compressed_result)
-        #assert result == ['t']
+        floto.COMPRESS_GENERATOR_RESULT = False
+        b = floto.decider.DecisionBuilder(activity_tasks=[], default_activity_task_list='')
+        assert b._decompress_generator_result == False
 
     def test_get_generator(self, builder, mocker):
         mocker.patch('floto.History.get_id_task_event', return_value='g_id')
@@ -514,8 +512,4 @@ class TestDecisionBuilder(object):
         b.history.get_events_for_decision.assert_called_once_with(1,3)
         completed_arg = b._update_execution_graph_with_completed_events.call_args[0][0]
         assert [e['eventId'] for e in completed_arg] == [1,2]
-
-
-
-
 

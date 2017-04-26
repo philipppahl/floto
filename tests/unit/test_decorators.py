@@ -4,6 +4,8 @@ import floto
 import floto.decider
 import floto.specs.task
 
+floto.COMPRESS_GENERATOR_RESULT = False
+
 class TestDecorators():
     def test_activity(self):
         @floto.activity(domain='d', name='my_func', version='v1')
@@ -33,11 +35,10 @@ class TestDecorators():
 
     def test_compress_generator_result(self, init_response):
         task = floto.specs.task.ActivityTask(domain='d', name='activity1', version='v1')
-        
         result = [task] 
-        floto.decorators.COMPRESS_GENERATOR_RESULT = True
+        floto.COMPRESS_GENERATOR_RESULT = True
         z = floto.decorators.compress_generator_result(result)
-        floto.decorators.COMPRESS_GENERATOR_RESULT = False
+        floto.COMPRESS_GENERATOR_RESULT = False
 
         b = floto.decider.DecisionBuilder(activity_tasks=[task], 
                 default_activity_task_list='floto_activities')
@@ -52,3 +53,4 @@ class TestDecorators():
         result = [task]
         z = floto.decorators.compress_generator_result(result)
         assert z == [task.serializable()] 
+

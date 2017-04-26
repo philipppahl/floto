@@ -24,7 +24,8 @@ class TestGenerator:
                 'id_':'aid',
                 'requires':['a'],
                 'input':{'foo':'bar'},
-                'retry_strategy':'rs'}
+                'retry_strategy':'rs',
+                'task_list':'tl'}
         g = floto.specs.task.Generator(**args)
         floto.specs.task.ActivityTask.__init__.assert_called_once_with(**args)
 

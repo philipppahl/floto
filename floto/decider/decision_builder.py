@@ -2,7 +2,8 @@ import floto
 import floto.decisions
 import floto.specs
 import copy
-import gzip
+import bz2
+import base64
 
 import logging
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class DecisionBuilder:
         self.first_event_id = None
         self.last_event_id = None
 
-        self._decompress_generator_result = False
+        self._decompress_generator_result = floto.COMPRESS_GENERATOR_RESULT 
 
     def get_decisions(self, history):
         logger.debug('get_decisions...')
@@ -316,9 +317,9 @@ class DecisionBuilder:
 
 
     def _decompress_result(self, compressed_result):
-        result_bytes = bytes([int(c, 16) for c in compressed_result.split('x')])
-        result = gzip.decompress(result_bytes).decode()
-        result = json.loads(result)
+        b = compressed_result.encode('UTF-8')
+        s = bz2.decompress(base64.b64decode(b)).decode('UTF-8')
+        result = json.loads(s)
         return result
             
     def _get_generator(self, completed_event):
