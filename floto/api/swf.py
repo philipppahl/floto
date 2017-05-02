@@ -5,6 +5,7 @@ import boto3
 import botocore.exceptions
 from botocore.client import Config
 import signal
+import datetime as dt
 
 import floto.api
 import floto.specs
@@ -93,9 +94,19 @@ class Swf(object):
                 logger.error(e)
 
     # TODO Test lambda role
-    def start_workflow_execution(self, *, domain, workflow_type_name, workflow_type_version,
-                                 workflow_id=None, task_list=None, input=None,
-                                 decision_task_start_to_close_timeout=None, lambda_role=None):
+    def start_workflow_execution(
+            self, 
+            *, 
+            domain, 
+            workflow_type_name, 
+            workflow_type_version,
+            workflow_id=None, 
+            task_list=None, 
+            input=None,
+            decision_task_start_to_close_timeout=None, 
+            lambda_role=None,
+            terminate_active=False
+            ):
         """Start the workflow execution
 
         Parameters
@@ -119,6 +130,8 @@ class Swf(object):
             the workflow type using RegisterWorkflowType .
         lambda_role : Optional[str]
             IAM role which provides access to Lambda from floto. 
+        terminate_active: bool
+            If true, active workflow with workflow_id is terminated before execution
         """
 
         workflow_id = workflow_id or (workflow_type_name + '_' + workflow_type_version)
@@ -137,6 +150,9 @@ class Swf(object):
         if lambda_role:
             args['lambdaRole'] = lambda_role
 
+        if terminate_active and self.is_active(domain=domain, workflow_id=args['workflowId']):
+            self.terminate_workflow_execution(domain=domain, workflow_id=args['workflowId'])
+
         return self.client.start_workflow_execution(**args)
 
     def signal_workflow_execution(self, domain, workflow_id, signal_name, input=None, run_id=None):
@@ -154,21 +170,77 @@ class Swf(object):
 
         self.client.signal_workflow_execution(**args)
 
-    def terminate_workflow_execution(self, domain=None, workflow_id=None, run_id=None):
+    def terminate_workflow_execution(self, domain=None, workflow_id=None, run_id=None, **kwargs):
         if not domain or not workflow_id:
             message = 'terminate_workflow_execution(): domain and workflow_id are required'
             raise ValueError(message)
-        args = {'domain': domain,
-                'workflowId': workflow_id}
+        args = {
+                'domain': domain,
+                'workflowId': workflow_id,
+                'childPolicy': 'TERMINATE',
+                }
         if run_id:
             args['runId'] = run_id
         self.client.terminate_workflow_execution(**args)
 
+    # TODO test 
+    def list_open_workflow_executions(
+            self,
+            *, 
+            domain, 
+            workflow_id=None,
+            workflow_type_name=None, 
+            workflow_type_version=None, 
+            **kwargs):
+        '''Lists open executions. Filters by type name and version.
+
+        Parameter
+        ---------
+        workflow_id: Optional id filter
+        workflow_type_name and version: Optional type/version filter
+        '''
+        args = {
+                'domain': domain,
+                'startTimeFilter': {'oldestDate': dt.datetime.now() - dt.timedelta(days=7)}
+                }
+
+        if workflow_id: 
+            args['executionFilter'] = {'workflowId': workflow_id}
+
+        if not workflow_id and workflow_type_name and workflow_type_version:
+            args['typeFilter'] = {
+                    'name': workflow_type_name,
+                    'version': workflow_type_version
+                    }
+        open_workflows = []
+        for page in self.client.get_paginator('list_open_workflow_executions').paginate(**args):
+            if 'executionInfos' in page:
+                for workflow in page['executionInfos']:
+                    if workflow['executionStatus'] == 'OPEN':
+                        open_workflows.append(workflow)
+        return open_workflows
+
+    # TODO use kwargs
     def describe_workflow_execution(self, domain, workflow_id, run_id):
-        args = {'domain': domain,
-                'execution': {'workflowId': workflow_id,
-                              'runId': run_id}}
+        args = {
+                'domain': domain,
+                'execution': {
+                    'workflowId': workflow_id,
+                    'runId': run_id
+                    }
+                }
         return self.client.describe_workflow_execution(**args)
+
+    # TODO test
+    def workflow_execution_info(self, *, domain, workflow_id, run_id, **kwargs):
+        return self.describe_workflow_execution(
+                domain,
+                workflow_id,
+                run_id
+                )['executionInfo']
+
+    def is_active(self, *, domain, workflow_id, **kwargs):
+        return bool(self.list_open_workflow_executions(domain=domain, workflow_id=workflow_id))
 
     def get_workflow_execution_history(self, domain, run_id, workflow_id):
         args = {'domain': domain,
@@ -187,3 +259,4 @@ class Swf(object):
         args = {'taskToken': task_token}
         if details: args['details'] = details
         self.client.record_activity_task_heartbeat(**args)
+
